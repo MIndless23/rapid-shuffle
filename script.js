@@ -29,10 +29,132 @@ const leaderboardList = document.getElementById('leaderboard-list');
 const leaderboardInput = document.getElementById('leaderboard-input');
 const playerNameInput = document.getElementById('player-name');
 const submitScoreBtn = document.getElementById('submit-score');
-const difficultyBtns = document.querySelectorAll('.difficulty-btn');
+
 
 // Constants
 const LEADERBOARD_KEY = 'shellGameLeaderboard';
+
+// Audio Context
+let audioCtx = null;
+
+function getAudioContext() {
+    if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+            audioCtx = new AudioContext();
+        }
+    }
+    return audioCtx;
+}
+
+function playInitializeSound() {
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.2);
+        
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.2);
+    } catch (err) {
+        console.warn('Initialize sound failed', err);
+    }
+}
+
+function playSwapSound() {
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.type = 'triangle';
+        osc.frequency.value = 300 + Math.random() * 200;
+        
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.1);
+    } catch (err) {
+        console.warn('Swap sound failed', err);
+    }
+}
+
+function playCorrectSound() {
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        
+        // Happy arpeggio
+        const notes = [523.25, 659.25, 783.99]; // C, E, G
+        
+        notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            
+            const startTime = ctx.currentTime + (i * 0.08);
+            gain.gain.setValueAtTime(0.25, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+            
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            
+            osc.start(startTime);
+            osc.stop(startTime + 0.3);
+        });
+    } catch (err) {
+        console.warn('Correct sound failed', err);
+    }
+}
+
+function playWrongSound() {
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        
+        // Sad descending notes
+        const notes = [400, 350, 300];
+        
+        notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            
+            osc.type = 'sawtooth';
+            osc.frequency.value = freq;
+            
+            const startTime = ctx.currentTime + (i * 0.15);
+            gain.gain.setValueAtTime(0.2, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.4);
+            
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            
+            osc.start(startTime);
+            osc.stop(startTime + 0.4);
+        });
+    } catch (err) {
+        console.warn('Wrong sound failed', err);
+    }
+}
 
 function init() {
     playBtn.addEventListener('click', startGame);
@@ -40,11 +162,6 @@ function init() {
     submitScoreBtn.addEventListener('click', submitScore);
     playerNameInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') submitScore();
-    });
-    
-    // Difficulty buttons
-    difficultyBtns.forEach(btn => {
-        btn.addEventListener('click', () => setDifficulty(btn.dataset.difficulty));
     });
     
     shells.forEach((shell, index) => {
@@ -59,25 +176,11 @@ function init() {
 }
 
 // Difficulty Functions
-function setDifficulty(difficulty) {
-    if (state.isShuffling) return;
-    
-    state.difficulty = difficulty;
-    
-    // Update button states
-    difficultyBtns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.difficulty === difficulty);
-    });
-    
-    setMessage(`// DIFFICULTY SET: ${difficulty.toUpperCase()}`, "default");
-}
-
-function disableDifficultyButtons() {
-    difficultyBtns.forEach(btn => btn.disabled = true);
-}
-
-function enableDifficultyButtons() {
-    difficultyBtns.forEach(btn => btn.disabled = false);
+function randomizeDifficulty() {
+    const difficulties = ['easy', 'medium', 'hard'];
+    const randomDifficulty = difficulties[Math.floor(Math.random() * difficulties.length)];
+    state.difficulty = randomDifficulty;
+    setMessage(`// DIFFICULTY: ${randomDifficulty.toUpperCase()}`, "default");
 }
 
 // Leaderboard Functions
@@ -164,6 +267,12 @@ function submitScore() {
 async function startGame() {
     if (state.isShuffling) return;
     
+    // Play initialize sound
+    playInitializeSound();
+    
+    // Randomize difficulty each game
+    randomizeDifficulty();
+    
     const settings = DIFFICULTY_SETTINGS[state.difficulty];
     
     hideLeaderboardInput();
@@ -172,7 +281,6 @@ async function startGame() {
     state.isGameActive = false;
     playBtn.disabled = true;
     resetBtn.disabled = true;
-    disableDifficultyButtons();
     setMessage("// SCANNING TARGET...", "default");
     
     shells.forEach(shell => shell.classList.add('no-hover'));
@@ -198,7 +306,6 @@ async function startGame() {
     state.isShuffling = false;
     state.isGameActive = true;
     resetBtn.disabled = false;
-    enableDifficultyButtons();
     setMessage("// SELECT TARGET CONTAINER", "default");
     
     shells.forEach(shell => shell.classList.remove('no-hover'));
@@ -217,6 +324,8 @@ async function performSwap(swapSpeed) {
     state.shellPositions[shellIdx1] = pos2;
     state.shellPositions[shellIdx2] = pos1;
     
+    playSwapSound(); // Play sound on each swap
+    
     updateShellVisuals(swapSpeed);
     
     await new Promise(r => setTimeout(r, swapSpeed));
@@ -231,7 +340,7 @@ function updateShellVisuals(speed = 300) {
     shells.forEach((shell, i) => {
         shell.style.transition = `transform ${speed}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
         const visualPos = state.shellPositions[i];
-        const currentTransform = (visualPos - i) * 100;
+        const currentTransform = (visualPos - i) * 200; // 2x bigger spacing
         shell.style.transform = `translateX(${currentTransform}px)`;
     });
 }
@@ -243,7 +352,7 @@ function updateBallPositionDuringSwap() {
     const containerRect = document.querySelector('.shell-container').getBoundingClientRect();
     const playAreaRect = document.querySelector('.play-area').getBoundingClientRect();
     
-    const slotCenterX = (containerRect.left - playAreaRect.left) + (visualPos * 100) + 40;
+    const slotCenterX = (containerRect.left - playAreaRect.left) + (visualPos * 200) + 80; // 2x bigger spacing + center
     const leftOffset = slotCenterX - 25;
     
     ball.style.left = `${leftOffset}px`;
@@ -274,9 +383,11 @@ async function revealSequence(clickedIndex, isCorrect) {
     
     if (isCorrect) {
         // Now add the bounce animation after cup is lifted
+        playCorrectSound(); // Play correct sound
         ball.classList.add('winner');
         handleWin();
     } else {
+        playWrongSound(); // Play wrong sound
         setMessage("// ACCESS DENIED", "error");
         
         await new Promise(r => setTimeout(r, 500));
@@ -292,9 +403,6 @@ async function revealSequence(clickedIndex, isCorrect) {
         
         handleLoss(clickedIndex);
     }
-    
-    playBtn.disabled = false;
-    playBtn.querySelector('span').textContent = "RETRY";
 }
 
 function liftShell(shell) {
@@ -337,9 +445,21 @@ function handleWin() {
     state.streak++;
     if (state.streak > state.highScore) state.highScore = state.streak;
     updateScoreboard(true);
+    
+    playBtn.disabled = false;
+    playBtn.querySelector('span').textContent = "CONTINUE";
 }
 
 function handleLoss(clickedIndex) {
+    setMessage("// SYSTEM FAILURE - INITIATING REDEMPTION PROTOCOL...", "error");
+    
+    // Automatically start redemption after a brief delay
+    setTimeout(() => {
+        startRedemption();
+    }, 1500);
+}
+
+function processFinalLoss() {
     const finalScore = state.streak;
     setMessage("// SYSTEM FAILURE - STREAK RESET", "error");
     
@@ -352,6 +472,110 @@ function handleLoss(clickedIndex) {
     
     state.streak = 0;
     updateScoreboard(false);
+    
+    playBtn.disabled = false;
+    playBtn.querySelector('span').textContent = "RETRY";
+}
+
+function startRedemption() {
+    // Create backrooms transition overlay
+    const transitionOverlay = document.createElement('div');
+    transitionOverlay.className = 'backrooms-transition';
+    document.body.appendChild(transitionOverlay);
+    
+    // Start falling animation on game container
+    const gameContainer = document.querySelector('.game-container');
+    gameContainer.classList.add('falling');
+    
+    // Play falling sound
+    playBackroomsFallSound();
+    
+    // Wait for animation, then start Doom
+    setTimeout(() => {
+        // Start Doom Game
+        if (window.doomGame) {
+            window.doomGame.start((won) => {
+                // Remove transition overlay
+                transitionOverlay.remove();
+                gameContainer.classList.remove('falling');
+                
+                if (won) {
+                    setMessage("// REDEMPTION SUCCESSFUL - STREAK RESTORED", "success");
+                    playBtn.querySelector('span').textContent = "CONTINUE";
+                    playBtn.disabled = false;
+                    // Don't reset streak
+                } else {
+                    processFinalLoss();
+                }
+            });
+        } else {
+            console.error("Doom game module not loaded");
+            transitionOverlay.remove();
+            gameContainer.classList.remove('falling');
+            processFinalLoss();
+        }
+    }, 1500); // Match animation duration
+}
+
+function playBackroomsFallSound() {
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        
+        // Low rumble that descends
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        
+        osc1.type = 'sine';
+        osc2.type = 'sine';
+        
+        osc1.frequency.setValueAtTime(120, ctx.currentTime);
+        osc1.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 1.5);
+        
+        osc2.frequency.setValueAtTime(180, ctx.currentTime);
+        osc2.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 1.5);
+        
+        filter.type = 'lowpass';
+        filter.frequency.value = 300;
+        
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.5);
+        
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc1.start(ctx.currentTime);
+        osc2.start(ctx.currentTime);
+        osc1.stop(ctx.currentTime + 1.5);
+        osc2.stop(ctx.currentTime + 1.5);
+        
+        // Add glitch sounds
+        for (let i = 0; i < 5; i++) {
+            const glitchTime = ctx.currentTime + (Math.random() * 1.5);
+            const noise = ctx.createBufferSource();
+            const bufferSize = ctx.sampleRate * 0.05;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            for (let j = 0; j < bufferSize; j++) {
+                data[j] = (Math.random() * 2 - 1) * 0.2;
+            }
+            
+            noise.buffer = buffer;
+            const glitchGain = ctx.createGain();
+            glitchGain.gain.value = 0.1;
+            
+            noise.connect(glitchGain);
+            glitchGain.connect(ctx.destination);
+            noise.start(glitchTime);
+        }
+    } catch (err) {
+        console.warn('Backrooms fall sound failed', err);
+    }
 }
 
 function updateScoreboard(isWin) {
@@ -379,7 +603,6 @@ function resetGame() {
     state.shellPositions = [0, 1, 2];
     
     hideLeaderboardInput();
-    enableDifficultyButtons();
     updateScoreboard(false);
     hideBall(1);
     resetShells();

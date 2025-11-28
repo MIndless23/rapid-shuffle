@@ -1,0 +1,205 @@
+/* Modal Overlay */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    background: rgba(10, 10, 20, 0.95);
+    border: 2px solid var(--neon-pink);
+    padding: 3rem;
+    text-align: center;
+    max-width: 500px;
+    box-shadow: 
+        0 0 30px rgba(255, 42, 109, 0.3),
+        inset 0 0 50px rgba(255, 42, 109, 0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.modal-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 2px,
+        rgba(255, 42, 109, 0.05) 3px,
+        rgba(255, 42, 109, 0.05) 4px
+    );
+    pointer-events: none;
+}
+
+.modal-content h2 {
+    color: var(--neon-pink);
+    font-size: 3rem;
+    margin-bottom: 1.5rem;
+    text-shadow: 0 0 10px var(--neon-pink);
+}
+
+.cyber-text {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+    margin-bottom: 2rem;
+    letter-spacing: 1px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+}
+
+/* Doom Container */
+.doom-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    z-index: 2000;
+}
+
+/* Backrooms Transition */
+@keyframes fallIntoBackrooms {
+    0% {
+        transform: scale(1) rotateX(0deg);
+        opacity: 1;
+        filter: brightness(1);
+    }
+    30% {
+        transform: scale(0.8) rotateX(15deg);
+        opacity: 0.8;
+        filter: brightness(0.7) blur(2px);
+    }
+    60% {
+        transform: scale(0.4) rotateX(45deg) translateY(30%);
+        opacity: 0.5;
+        filter: brightness(0.3) blur(5px);
+    }
+    100% {
+        transform: scale(0.1) rotateX(90deg) translateY(100%);
+        opacity: 0;
+        filter: brightness(0) blur(10px);
+    }
+}
+
+@keyframes backroomsVignette {
+    0% {
+        box-shadow: inset 0 0 0 rgba(0, 0, 0, 0);
+        background-color: rgba(0, 0, 0, 0);
+    }
+    70% {
+        box-shadow: inset 0 0 200px 100px rgba(0, 0, 0, 0.9);
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+    100% {
+        box-shadow: inset 0 0 300px 150px rgba(0, 0, 0, 1);
+        background-color: rgba(0, 0, 0, 1);
+    }
+}
+
+@keyframes staticNoise {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 0.3; }
+}
+
+.backrooms-transition {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1999;
+    pointer-events: none;
+}
+
+.backrooms-transition::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: 
+        repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 200, 0.03) 0px,
+            rgba(255, 255, 200, 0.03) 2px,
+            rgba(200, 200, 150, 0.02) 2px,
+            rgba(200, 200, 150, 0.02) 4px
+        );
+    animation: backroomsVignette 1.5s ease-out forwards;
+}
+
+.backrooms-transition::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><filter id="noise"><feTurbulence baseFrequency="0.9" /></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.3"/></svg>');
+    animation: staticNoise 0.2s infinite;
+    opacity: 0;
+}
+
+.game-container.falling {
+    animation: fallIntoBackrooms 1.5s ease-in forwards;
+}
+
+canvas#doom-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.doom-ui {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 2rem;
+    color: var(--neon-green);
+    text-shadow: 0 0 10px var(--neon-green);
+    pointer-events: none;
+    z-index: 10;
+}
+
+.doom-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 5rem;
+    color: var(--neon-yellow);
+    text-shadow: 0 0 20px var(--neon-yellow);
+    text-align: center;
+    pointer-events: none;
+    z-index: 20;
+}
+
+.doom-score {
+    color: var(--neon-cyan);
+    text-shadow: 0 0 10px var(--neon-cyan);
+}
+

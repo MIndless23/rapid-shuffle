@@ -8,25 +8,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&family=Bebas+Neue&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="doom.css">
 </head>
 <body>
     <!-- GIF Background -->
     <div class="gif-bg"></div>
     <div class="video-overlay"></div>
     <div class="scanlines"></div>
-    
-    <!-- Difficulty Selector -->
-    <div class="difficulty-panel">
-        <div class="difficulty-header">
-            <span class="difficulty-icon">⚡</span>
-            <span>DIFFICULTY</span>
-        </div>
-        <div class="difficulty-options">
-            <button class="difficulty-btn active" data-difficulty="easy">EASY</button>
-            <button class="difficulty-btn" data-difficulty="medium">MEDIUM</button>
-            <button class="difficulty-btn" data-difficulty="hard">HARD</button>
-        </div>
-    </div>
     
     <!-- Leaderboard Panel -->
     <div class="leaderboard">
@@ -42,6 +30,16 @@
             <input type="text" id="player-name" placeholder="ENTER NAME" maxlength="10">
             <button id="submit-score" class="cyber-btn-small">SAVE</button>
         </div>
+    </div>
+
+    <!-- Doom Game Overlay -->
+    <div id="doom-overlay" class="doom-container" style="display: none;">
+        <div class="doom-ui">
+            <div class="doom-health">HP: <span id="doom-hp">100</span>%</div>
+            <div class="doom-score">TARGETS: <span id="doom-targets">0</span>/5</div>
+        </div>
+        <canvas id="doom-canvas"></canvas>
+        <div class="doom-message" id="doom-message" style="display: none;"></div>
     </div>
     
     <div class="game-container">
@@ -95,5 +93,6 @@
     </div>
 
     <script src="script.js"></script>
+    <script src="doom.js"></script>
 </body>
 </html>
