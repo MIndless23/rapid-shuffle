@@ -30,10 +30,6 @@ const leaderboardInput = document.getElementById('leaderboard-input');
 const playerNameInput = document.getElementById('player-name');
 const submitScoreBtn = document.getElementById('submit-score');
 
-// Redemption Elements
-const redemptionPopup = document.getElementById('redemption-popup');
-const redeemYesBtn = document.getElementById('redeem-yes-btn');
-const redeemNoBtn = document.getElementById('redeem-no-btn');
 
 // Constants
 const LEADERBOARD_KEY = 'shellGameLeaderboard';
@@ -166,13 +162,6 @@ function init() {
     submitScoreBtn.addEventListener('click', submitScore);
     playerNameInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') submitScore();
-    });
-    
-    // Redemption Listeners
-    redeemYesBtn.addEventListener('click', startRedemption);
-    redeemNoBtn.addEventListener('click', () => {
-        redemptionPopup.style.display = 'none';
-        processFinalLoss();
     });
     
     shells.forEach((shell, index) => {
@@ -464,10 +453,10 @@ function handleWin() {
 function handleLoss(clickedIndex) {
     setMessage("// SYSTEM FAILURE - INITIATING REDEMPTION PROTOCOL...", "error");
     
-    // Show Redemption Popup instead of immediate loss
+    // Automatically start redemption after a brief delay
     setTimeout(() => {
-        redemptionPopup.style.display = 'flex';
-    }, 1000);
+        startRedemption();
+    }, 1500);
 }
 
 function processFinalLoss() {
@@ -489,8 +478,6 @@ function processFinalLoss() {
 }
 
 function startRedemption() {
-    redemptionPopup.style.display = 'none';
-    
     // Create backrooms transition overlay
     const transitionOverlay = document.createElement('div');
     transitionOverlay.className = 'backrooms-transition';
