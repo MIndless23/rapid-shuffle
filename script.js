@@ -32,7 +32,9 @@ const submitScoreBtn = document.getElementById('submit-score');
 
 
 // Constants
+const SHELL_SPACING = 200; // Horizontal spacing between shell slots (px)
 const LEADERBOARD_KEY = 'shellGameLeaderboard';
+const PERSONAL_BEST_KEY = 'shellGamePersonalBest';
 
 // Audio Context
 let audioCtx = null;
@@ -214,18 +216,22 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function getPersonalBest() {
+    const personalBest = localStorage.getItem(PERSONAL_BEST_KEY);
+    return personalBest ? parseInt(personalBest, 10) : 0;
+}
+
+function setPersonalBest(score) {
+    localStorage.setItem(PERSONAL_BEST_KEY, score.toString());
+}
+
 function checkLeaderboardEligibility(score) {
     if (score <= 0) return false;
     
-    const data = localStorage.getItem(LEADERBOARD_KEY);
-    const leaderboard = data ? JSON.parse(data) : [];
+    const personalBest = getPersonalBest();
     
-    if (leaderboard.length < 10) return true;
-    
-    leaderboard.sort((a, b) => b.score - a.score);
-    const lowestTop10 = leaderboard[9]?.score || 0;
-    
-    return score > lowestTop10;
+    // Only allow leaderboard entry if the score beats the player's personal best
+    return score > personalBest;
 }
 
 function showLeaderboardInput(score) {
@@ -258,6 +264,10 @@ function submitScore() {
     const top10 = leaderboard.slice(0, 10);
     
     localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(top10));
+    
+    // Update personal best after successful submission
+    setPersonalBest(state.pendingScore);
+    
     renderLeaderboard(top10);
     hideLeaderboardInput();
     setMessage("// SCORE UPLOADED TO DATABASE", "success");
@@ -340,8 +350,15 @@ function updateShellVisuals(speed = 300) {
     shells.forEach((shell, i) => {
         shell.style.transition = `transform ${speed}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
         const visualPos = state.shellPositions[i];
-        const currentTransform = (visualPos - i) * 200; // 2x bigger spacing
+        const currentTransform = (visualPos - i) * SHELL_SPACING;
         shell.style.transform = `translateX(${currentTransform}px)`;
+
+        // Ensure shells are visually "down" during shuffles
+        const inner = shell.querySelector('.shell-inner');
+        if (inner) {
+            inner.style.transition = `transform ${speed}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
+            inner.style.transform = 'translateY(0)';
+        }
     });
 }
 
@@ -352,7 +369,7 @@ function updateBallPositionDuringSwap() {
     const containerRect = document.querySelector('.shell-container').getBoundingClientRect();
     const playAreaRect = document.querySelector('.play-area').getBoundingClientRect();
     
-    const slotCenterX = (containerRect.left - playAreaRect.left) + (visualPos * 200) + 80; // 2x bigger spacing + center
+    const slotCenterX = (containerRect.left - playAreaRect.left) + (visualPos * SHELL_SPACING) + 80; // spacing + center
     const leftOffset = slotCenterX - 25;
     
     ball.style.left = `${leftOffset}px`;
@@ -372,45 +389,63 @@ function handleShellClick(originalIndex) {
 async function revealSequence(clickedIndex, isCorrect) {
     const clickedShell = shells[clickedIndex];
     const correctShell = shells[state.ballPosition];
-    
-    updateBallPositionDuringSwap();
-    ball.style.display = 'block';
-    
-    liftShell(clickedShell);
-    
-    // Wait for cup to fully lift before showing result
-    await new Promise(r => setTimeout(r, 600));
-    
+
+    // Ensure ball is hidden and animation reset at the start of reveal
+    ball.classList.remove('winner');
+    ball.style.display = 'none';
+
     if (isCorrect) {
-        // Now add the bounce animation after cup is lifted
+        // Position and show the ball immediately as the lift starts
+        updateBallPositionDuringSwap();
+        ball.style.display = 'block';
+
+        // Lift the chosen (correct) shell
+        liftShell(clickedShell);
+
+        // Wait for cup to fully lift before starting bounce / scoring
+        await new Promise(r => setTimeout(r, 600));
+
+        // Add the bounce animation after the reveal
         playCorrectSound(); // Play correct sound
         ball.classList.add('winner');
         handleWin();
     } else {
+        // First lift the clicked (wrong) shell with no ball reveal yet
+        liftShell(clickedShell);
+
+        // Wait for wrong cup to lift fully
+        await new Promise(r => setTimeout(r, 600));
+
         playWrongSound(); // Play wrong sound
         setMessage("// ACCESS DENIED", "error");
-        
+
+        // Brief pause before revealing the correct shell
         await new Promise(r => setTimeout(r, 500));
-        
+
+        // Position and show the ball immediately as the correct shell starts lifting
+        updateBallPositionDuringSwap();
+        ball.style.display = 'block';
+
+        // Now lift the correct shell
         liftShell(correctShell);
-        
-        // Wait for correct cup to lift before bounce
+
+        // Wait for correct cup to lift before starting bounce
         await new Promise(r => setTimeout(r, 600));
-        
         ball.classList.add('winner');
-        
+
         await new Promise(r => setTimeout(r, 200));
-        
+
         handleLoss(clickedIndex);
     }
 }
 
 function liftShell(shell) {
-    const shellIndex = parseInt(shell.dataset.originalIndex);
-    const visualPos = state.shellPositions[shellIndex];
-    const currentTransformX = (visualPos - shellIndex) * 100;
-    
-    shell.style.transform = `translateX(${currentTransformX}px) translateY(-60px)`;
+    // Only move the inner graphic vertically so we don't disturb horizontal cup spacing
+    const inner = shell.querySelector('.shell-inner');
+    if (!inner) return;
+
+    inner.style.transition = 'transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+    inner.style.transform = 'translateY(-60px)';
 }
 
 function updateBallPosition() {
@@ -435,8 +470,15 @@ async function revealBall(index) {
 function resetShells() {
     shells.forEach((shell, i) => {
         const visualPos = state.shellPositions[i];
-        const currentTransformX = (visualPos - i) * 100;
+        const currentTransformX = (visualPos - i) * SHELL_SPACING;
         shell.style.transform = `translateX(${currentTransformX}px)`;
+
+        // Return lifted shells back to their resting position
+        const inner = shell.querySelector('.shell-inner');
+        if (inner) {
+            inner.style.transition = 'transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+            inner.style.transform = 'translateY(0)';
+        }
     });
 }
 
@@ -478,6 +520,9 @@ function processFinalLoss() {
 }
 
 function startRedemption() {
+    // Slightly brighten the whole scene during redemption
+    document.body.classList.add('redeem-bright');
+
     // Create backrooms transition overlay
     const transitionOverlay = document.createElement('div');
     transitionOverlay.className = 'backrooms-transition';
@@ -495,9 +540,10 @@ function startRedemption() {
         // Start Doom Game
         if (window.doomGame) {
             window.doomGame.start((won) => {
-                // Remove transition overlay
+                // Remove transition overlay and brightness effect
                 transitionOverlay.remove();
                 gameContainer.classList.remove('falling');
+                document.body.classList.remove('redeem-bright');
                 
                 if (won) {
                     setMessage("// REDEMPTION SUCCESSFUL - STREAK RESTORED", "success");
@@ -512,6 +558,7 @@ function startRedemption() {
             console.error("Doom game module not loaded");
             transitionOverlay.remove();
             gameContainer.classList.remove('falling');
+            document.body.classList.remove('redeem-bright');
             processFinalLoss();
         }
     }, 1500); // Match animation duration

@@ -59,6 +59,15 @@ body {
     z-index: 1;
 }
 
+/* Slightly brighter look when redemption screen is active */
+body.redeem-bright .gif-bg {
+    filter: brightness(1.15) contrast(1.05);
+}
+
+body.redeem-bright .video-overlay {
+    background: rgba(10, 10, 15, 0.45);
+}
+
 /* CRT Scanlines Effect */
 .scanlines {
     position: fixed;

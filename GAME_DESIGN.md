@@ -58,3 +58,5 @@ This document serves as the master prompt and specification for building a "Thre
 "I am working on the Shell Cup Game defined in `GAME_DESIGN.md`. Please implement [Phase X] focusing on [specific feature]. Ensure animations are smooth and state is managed correctly."
 
 
+
+

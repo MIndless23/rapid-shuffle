@@ -203,3 +203,37 @@ canvas#doom-canvas {
     text-shadow: 0 0 10px var(--neon-cyan);
 }
 
+.doom-bullets {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    padding: 10px 16px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    color: var(--neon-yellow);
+    border: 2px solid var(--neon-yellow);
+    background: rgba(0, 0, 0, 0.6);
+    text-shadow: 0 0 8px var(--neon-yellow);
+    box-shadow: 0 0 15px rgba(249, 240, 2, 0.4);
+    z-index: 15;
+}
+
+.doom-timer {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--neon-green);
+    border: 2px solid var(--neon-green);
+    background: rgba(0, 0, 0, 0.8);
+    text-shadow: 0 0 10px var(--neon-green);
+    box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
+    z-index: 15;
+    transition: all 0.3s ease;
+}
+
