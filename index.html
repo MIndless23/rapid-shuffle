@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAPID SHUFFLE // Cyberpunk Shell Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- GIF Background -->
+    <div class="gif-bg"></div>
+    <div class="video-overlay"></div>
+    <div class="scanlines"></div>
+    
+    <!-- Difficulty Selector -->
+    <div class="difficulty-panel">
+        <div class="difficulty-header">
+            <span class="difficulty-icon">⚡</span>
+            <span>DIFFICULTY</span>
+        </div>
+        <div class="difficulty-options">
+            <button class="difficulty-btn active" data-difficulty="easy">EASY</button>
+            <button class="difficulty-btn" data-difficulty="medium">MEDIUM</button>
+            <button class="difficulty-btn" data-difficulty="hard">HARD</button>
+        </div>
+    </div>
+    
+    <!-- Leaderboard Panel -->
+    <div class="leaderboard">
+        <div class="leaderboard-header">
+            <span class="leaderboard-icon">◈</span>
+            <span>LEADERBOARD</span>
+        </div>
+        <div class="leaderboard-list" id="leaderboard-list">
+            <!-- Entries will be added by JS -->
+            <div class="leaderboard-empty">// NO DATA</div>
+        </div>
+        <div class="leaderboard-input" id="leaderboard-input" style="display: none;">
+            <input type="text" id="player-name" placeholder="ENTER NAME" maxlength="10">
+            <button id="submit-score" class="cyber-btn-small">SAVE</button>
+        </div>
+    </div>
+    
+    <div class="game-container">
+        <header>
+            <h1 class="glitch" data-text="RAPID SHUFFLE">RAPID SHUFFLE</h1>
+            <div class="score-board">
+                <div class="score-item">
+                    <span class="score-label">STREAK</span>
+                    <span class="score-value" id="streak">0</span>
+                </div>
+                <div class="score-item">
+                    <span class="score-label">HIGH SCORE</span>
+                    <span class="score-value" id="high-score">0</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="play-area">
+            <!-- Surface/Table -->
+            <div class="cyber-table"></div>
+            
+            <!-- The Ball (starts hidden/under a shell) -->
+            <div id="ball" class="ball"></div>
+
+            <!-- The Shells -->
+            <div class="shell-container">
+                <div class="shell" data-index="0">
+                    <div class="shell-inner"></div>
+                    <div class="shell-glow"></div>
+                </div>
+                <div class="shell" data-index="1">
+                    <div class="shell-inner"></div>
+                    <div class="shell-glow"></div>
+                </div>
+                <div class="shell" data-index="2">
+                    <div class="shell-inner"></div>
+                    <div class="shell-glow"></div>
+                </div>
+            </div>
+        </main>
+
+        <div class="controls">
+            <button id="play-btn" class="cyber-btn primary">
+                <span>INITIALIZE</span>
+            </button>
+            <button id="reset-btn" class="cyber-btn danger">
+                <span>RESET</span>
+            </button>
+            <p id="message" class="cyber-message">// AWAITING INPUT...</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
