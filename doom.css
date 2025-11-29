@@ -167,6 +167,11 @@ canvas#doom-canvas {
     width: 100%;
     height: 100%;
     display: block;
+    cursor: crosshair;
+}
+
+canvas#doom-canvas:hover {
+    cursor: crosshair;
 }
 
 .doom-ui {
@@ -235,5 +240,60 @@ canvas#doom-canvas {
     box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
     z-index: 15;
     transition: all 0.3s ease;
+}
+
+.doom-crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    pointer-events: none;
+    z-index: 100;
+}
+
+.doom-crosshair::before,
+.doom-crosshair::after {
+    content: '';
+    position: absolute;
+    background: rgba(0, 255, 255, 0.8);
+    box-shadow: 0 0 8px rgba(0, 255, 255, 0.6);
+}
+
+.doom-crosshair::before {
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    transform: translateY(-50%);
+}
+
+.doom-crosshair::after {
+    left: 50%;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    transform: translateX(-50%);
+}
+
+.doom-controls-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    margin-top: 80px;
+    padding: 20px 30px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.2rem;
+    color: var(--neon-cyan);
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid var(--neon-cyan);
+    text-align: center;
+    text-shadow: 0 0 10px var(--neon-cyan);
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+    z-index: 99;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
 }
 

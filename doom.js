@@ -55,11 +55,16 @@ class DoomGame {
             forward: false,
             backward: false,
             left: false,
-            right: false
+            right: false,
+            rotateLeft: false,
+            rotateRight: false
         };
 
         this.enemies = [];
-        this.maxEnemies = 1; // Single monster
+        this.maxEnemies = 1; // Single monster initially
+        this.killsRequired = 3; // Need to kill 3 monsters total when gun mode active
+        this.killCount = 0;
+        this.huntMode = false; // Changes to true when gun is picked up
         this.lastTime = 0;
 
         // Movement tuning (allows powerups to modify speeds)
@@ -70,13 +75,20 @@ class DoomGame {
         this.enemySpeedMultiplier = 1; // enemy speed multiplier (used when stunned)
         this.enemyPowerupTimer = 0;    // enemy stun duration
 
-        // Gun power state
-        this.hasGun = false;
+        // Weapon state
+        this.currentWeapon = 'none'; // 'none', 'pistol', 'shotgun'
+        this.hasGun = false; // Legacy - kept for compatibility
         this.shootCooldown = 0;
-        this.shootCooldownTime = 0.6;
+        this.shootCooldownTime = 0.6; // Pistol fire rate
+        this.shotgunCooldownTime = 1.2; // Slower shotgun fire rate
         this.gunAnimTimer = 0;
-        this.gunAnimDuration = 0.25; // how long the shooting GIF is visible
+        this.gunAnimDuration = 0.25; // Pistol shooting animation duration
+        this.shotgunAnimDuration = 0.4; // Longer shotgun shooting animation
         this.bullets = 0;
+        
+        // Gun sway animation (walk bobbing)
+        this.gunSwayOffset = 0;
+        this.gunSwaySpeed = 8; // Speed of sway
         
         // Projectile bullets (visual)
         this.projectiles = [];
@@ -178,16 +190,52 @@ class DoomGame {
             console.error('Failed to load assets/clock power new.jpg - check file location');
         };
 
-        // First-person gun shooting GIF (root folder)
-        this.gunShootImage = new Image();
-        this.gunShootImage.src = 'first person gun.gif';
-        this.gunShootImageLoaded = false;
-        this.gunShootImage.onload = () => {
-            console.log('Gun shoot GIF loaded:', this.gunShootImage.width, 'x', this.gunShootImage.height);
-            this.gunShootImageLoaded = true;
+        // First-person gun sprite sheet (2x3 grid: top 4 frames idle, bottom 2 frames shooting)
+        this.gunSpriteSheet = new Image();
+        this.gunSpriteSheet.src = 'assets/gun.png';
+        this.gunSpriteSheetLoaded = false;
+        this.gunSpriteSheet.onload = () => {
+            console.log('Gun sprite sheet loaded:', this.gunSpriteSheet.width, 'x', this.gunSpriteSheet.height);
+            this.gunSpriteSheetLoaded = true;
+            // Sprite sheet is 2x3 grid
+            this.gunFrameWidth = this.gunSpriteSheet.width / 2;
+            this.gunFrameHeight = this.gunSpriteSheet.height / 3;
         };
-        this.gunShootImage.onerror = () => {
-            console.error('Failed to load first person gun.gif');
+        this.gunSpriteSheet.onerror = () => {
+            console.error('Failed to load assets/gun.png');
+        };
+        
+        // Gun animation state
+        this.gunIdleFrame = 0;
+        this.gunIdleTimer = 0;
+        this.gunIdleFrameDelay = 0.1; // Time between idle animation frames (faster)
+
+        // Shotgun sprite sheet (4 cols x 2 rows: top 4 frames idle/reload, bottom 6 frames shooting)
+        this.shotgunSpriteSheet = new Image();
+        this.shotgunSpriteSheet.src = 'assets/shotty.png';
+        this.shotgunSpriteSheetLoaded = false;
+        this.shotgunSpriteSheet.onload = () => {
+            console.log('Shotgun sprite sheet loaded:', this.shotgunSpriteSheet.width, 'x', this.shotgunSpriteSheet.height);
+            this.shotgunSpriteSheetLoaded = true;
+            // Sprite sheet appears to be 4 cols (top row) and 6 cols (bottom row)
+            // We'll treat it as a 6-column grid for consistency
+            this.shotgunFrameWidth = this.shotgunSpriteSheet.width / 6;
+            this.shotgunFrameHeight = this.shotgunSpriteSheet.height / 2;
+        };
+        this.shotgunSpriteSheet.onerror = () => {
+            console.error('Failed to load assets/shotty.png');
+        };
+
+        // Shotgun powerup pickup image (using gun power as fallback for now)
+        this.shotgunPowerImage = new Image();
+        this.shotgunPowerImage.src = 'assets/gun power.png'; // Using same icon as pistol for now
+        this.shotgunPowerImageLoaded = false;
+        this.shotgunPowerImage.onload = () => {
+            console.log('Shotgun power texture loaded:', this.shotgunPowerImage.width, 'x', this.shotgunPowerImage.height);
+            this.shotgunPowerImageLoaded = true;
+        };
+        this.shotgunPowerImage.onerror = () => {
+            console.warn('Failed to load shotgun power icon - will use fallback');
         };
 
         // Gun cock sound effect
@@ -204,7 +252,22 @@ class DoomGame {
             console.error('Failed to load sound-effects-single-gun-shot-247124.mp3');
         };
 
+        // BFG Division music for gun powerup
+        this.bfgMusic = new Audio('assets/Mick Gordon - 11. BFG Division.mp3');
+        this.bfgMusic.volume = 0.5;
+        this.bfgMusic.loop = false;
+        this.bfgMusic.onerror = () => {
+            console.error('Failed to load BFG Division music');
+        };
+
+        // Mouse look
+        this.mouseMovement = { x: 0, y: 0 };
+        this.mouseSensitivity = 0.002;
+        this.pointerLocked = false;
+        this.controlsHint = document.getElementById('doom-controls-hint');
+
         this.bindInput();
+        this.bindMouse();
         window.addEventListener('resize', () => this.resize());
     }
 
@@ -259,14 +322,30 @@ class DoomGame {
                 this.targetsElement.textContent = 'POWERUP ACQUIRED: SPEED BOOST';
             }
         } else if (powerup.type === 'gun') {
-            // Gun power: grant the ability to shoot and stun the monster
+            // Gun power: randomize between pistol and shotgun
+            const randomWeapon = Math.random() < 0.5 ? 'pistol' : 'shotgun';
+            
             this.hasGun = true;
-            this.bullets = 12;
+            this.currentWeapon = randomWeapon;
+            this.bullets = randomWeapon === 'pistol' ? 12 : 8;
             this.updateBulletUI();
+            
+            // Activate hunt mode only if first time getting gun
+            const wasInHuntMode = this.huntMode;
+            if (!this.huntMode) {
+                this.huntMode = true;
+                this.killCount = 0;
+            }
+            
+            // Update mission objective
+            const doomScore = document.querySelector('.doom-score');
+            if (doomScore) {
+                doomScore.innerHTML = '<span style="color:var(--neon-pink);font-size:1.2em;">I SMELL BLOOD</span><br><span style="font-size:0.7em;opacity:0.8">KILLS: <span style="color:var(--neon-yellow)">' + this.killCount + '/3</span></span>';
+            }
             
             // Play gun cock sound
             try {
-                this.gunCockSound.currentTime = 0; // Reset to start in case it was played before
+                this.gunCockSound.currentTime = 0;
                 this.gunCockSound.play().catch(err => {
                     console.warn('Gun cock sound failed to play:', err);
                 });
@@ -274,8 +353,66 @@ class DoomGame {
                 console.warn('Gun cock sound error:', err);
             }
             
+            // Play BFG Division only if not already playing
+            if (!wasInHuntMode) {
+                try {
+                    this.bfgMusic.currentTime = 0;
+                    this.bfgMusic.play().catch(err => {
+                        console.warn('BFG Division failed to play:', err);
+                    });
+                } catch (err) {
+                    console.warn('BFG Division error:', err);
+                }
+            }
+            
             if (this.targetsElement) {
-                this.targetsElement.textContent = 'POWERUP ACQUIRED: GUN ONLINE (SPACE TO SHOOT)';
+                const weaponName = randomWeapon === 'pistol' ? 'PISTOL' : 'SHOTGUN';
+                this.targetsElement.textContent = `POWERUP ACQUIRED: ${weaponName} ONLINE (SPACE TO SHOOT)`;
+            }
+        } else if (powerup.type === 'shotgun') {
+            // Shotgun-specific powerup (keeping for backwards compatibility, but gun powerup now does both)
+            this.hasGun = true;
+            this.currentWeapon = 'shotgun';
+            this.bullets = 8;
+            this.updateBulletUI();
+            
+            // Activate hunt mode only if first time getting gun
+            const wasInHuntMode = this.huntMode;
+            if (!this.huntMode) {
+                this.huntMode = true;
+                this.killCount = 0;
+            }
+            
+            // Update mission objective
+            const doomScore = document.querySelector('.doom-score');
+            if (doomScore) {
+                doomScore.innerHTML = '<span style="color:var(--neon-pink);font-size:1.2em;">I SMELL BLOOD</span><br><span style="font-size:0.7em;opacity:0.8">KILLS: <span style="color:var(--neon-yellow)">' + this.killCount + '/3</span></span>';
+            }
+            
+            // Play gun cock sound
+            try {
+                this.gunCockSound.currentTime = 0;
+                this.gunCockSound.play().catch(err => {
+                    console.warn('Gun cock sound failed to play:', err);
+                });
+            } catch (err) {
+                console.warn('Gun cock sound error:', err);
+            }
+            
+            // Play BFG Division only if not already playing
+            if (!wasInHuntMode) {
+                try {
+                    this.bfgMusic.currentTime = 0;
+                    this.bfgMusic.play().catch(err => {
+                        console.warn('BFG Division failed to play:', err);
+                    });
+                } catch (err) {
+                    console.warn('BFG Division error:', err);
+                }
+            }
+            
+            if (this.targetsElement) {
+                this.targetsElement.textContent = 'POWERUP ACQUIRED: SHOTGUN ONLINE (SPACE TO SHOOT)';
             }
         } else if (powerup.type === 'clock') {
             // Clock power: add 30 seconds to the timer
@@ -291,58 +428,124 @@ class DoomGame {
         }
     }
 
+    bindMouse() {
+        // Click canvas to lock pointer
+        this.canvas.addEventListener('click', () => {
+            if (!this.running) return;
+            if (!this.pointerLocked) {
+                this.canvas.requestPointerLock();
+            }
+            
+            // Left click to shoot
+            this.tryShoot();
+        });
+
+        // Pointer lock change events
+        document.addEventListener('pointerlockchange', () => {
+            this.pointerLocked = document.pointerLockElement === this.canvas;
+            
+            // Hide controls hint when pointer is locked
+            if (this.controlsHint) {
+                this.controlsHint.style.opacity = this.pointerLocked ? '0' : '1';
+            }
+        });
+
+        document.addEventListener('pointerlockerror', () => {
+            console.error('Pointer lock failed');
+        });
+
+        // Mouse movement for camera rotation
+        document.addEventListener('mousemove', (e) => {
+            if (!this.running || !this.pointerLocked) return;
+
+            const rotSpeed = this.mouseSensitivity * e.movementX;
+            
+            // Rotate direction vector
+            const oldDirX = this.player.dirX;
+            this.player.dirX = this.player.dirX * Math.cos(rotSpeed) - this.player.dirY * Math.sin(rotSpeed);
+            this.player.dirY = oldDirX * Math.sin(rotSpeed) + this.player.dirY * Math.cos(rotSpeed);
+            
+            // Rotate camera plane
+            const oldPlaneX = this.player.planeX;
+            this.player.planeX = this.player.planeX * Math.cos(rotSpeed) - this.player.planeY * Math.sin(rotSpeed);
+            this.player.planeY = oldPlaneX * Math.sin(rotSpeed) + this.player.planeY * Math.cos(rotSpeed);
+        });
+    }
+
     bindInput() {
         document.addEventListener('keydown', (e) => {
             if (!this.running) return;
             switch (e.key) {
-                case 'ArrowUp':
                 case 'w':
                 case 'W':
                     this.input.forward = true;
                     break;
-                case 'ArrowDown':
                 case 's':
                 case 'S':
                     this.input.backward = true;
                     break;
-                case 'ArrowLeft':
                 case 'a':
                 case 'A':
                     this.input.left = true;
                     break;
-                case 'ArrowRight':
                 case 'd':
                 case 'D':
                     this.input.right = true;
                     break;
+                case 'ArrowUp':
+                    this.input.forward = true;
+                    break;
+                case 'ArrowDown':
+                    this.input.backward = true;
+                    break;
+                case 'ArrowLeft':
+                    this.input.rotateLeft = true;
+                    break;
+                case 'ArrowRight':
+                    this.input.rotateRight = true;
+                    break;
                 case ' ':
-                    // Space to shoot when gun is active
+                    // Space to shoot when gun is active (backup to mouse click)
                     this.tryShoot();
+                    break;
+                case 'Escape':
+                    // Exit pointer lock
+                    if (this.pointerLocked) {
+                        document.exitPointerLock();
+                    }
                     break;
             }
         });
 
         document.addEventListener('keyup', (e) => {
             switch (e.key) {
-                case 'ArrowUp':
                 case 'w':
                 case 'W':
                     this.input.forward = false;
                     break;
-                case 'ArrowDown':
                 case 's':
                 case 'S':
                     this.input.backward = false;
                     break;
-                case 'ArrowLeft':
                 case 'a':
                 case 'A':
                     this.input.left = false;
                     break;
-                case 'ArrowRight':
                 case 'd':
                 case 'D':
                     this.input.right = false;
+                    break;
+                case 'ArrowUp':
+                    this.input.forward = false;
+                    break;
+                case 'ArrowDown':
+                    this.input.backward = false;
+                    break;
+                case 'ArrowLeft':
+                    this.input.rotateLeft = false;
+                    break;
+                case 'ArrowRight':
+                    this.input.rotateRight = false;
                     break;
             }
         });
@@ -353,14 +556,21 @@ class DoomGame {
         if (this.bullets <= 0) return;
         if (this.shootCooldown > 0) return;
 
-        this.shootCooldown = this.shootCooldownTime;
-        this.gunAnimTimer = this.gunAnimDuration;
+        // Set cooldown and animation based on weapon
+        if (this.currentWeapon === 'shotgun') {
+            this.shootCooldown = this.shotgunCooldownTime;
+            this.gunAnimTimer = this.shotgunAnimDuration;
+        } else {
+            this.shootCooldown = this.shootCooldownTime;
+            this.gunAnimTimer = this.gunAnimDuration;
+        }
+        
         this.bullets = Math.max(0, this.bullets - 1);
         this.updateBulletUI();
 
         // Play gun shot sound
         try {
-            this.gunShotSound.currentTime = 0; // Reset to start for rapid firing
+            this.gunShotSound.currentTime = 0;
             this.gunShotSound.play().catch(err => {
                 console.warn('Gun shot sound failed to play:', err);
             });
@@ -368,26 +578,49 @@ class DoomGame {
             console.warn('Gun shot sound error:', err);
         }
 
-        // Spawn visual bullet projectile
-        this.projectiles.push({
-            x: this.player.x,
-            y: this.player.y,
-            dirX: this.player.dirX,
-            dirY: this.player.dirY,
-            speed: 15, // Fast bullet speed
-            lifetime: 2.0 // Max lifetime in seconds
-        });
+        // Shotgun fires spread of 5 projectiles, pistol fires 1
+        const projectileCount = this.currentWeapon === 'shotgun' ? 5 : 1;
+        const spreadAngle = this.currentWeapon === 'shotgun' ? Math.PI / 12 : 0; // ~15 degree spread for shotgun
+        
+        for (let i = 0; i < projectileCount; i++) {
+            let dirX = this.player.dirX;
+            let dirY = this.player.dirY;
+            
+            if (projectileCount > 1) {
+                // Apply spread for shotgun
+                const offset = (i - (projectileCount - 1) / 2) * (spreadAngle / (projectileCount - 1));
+                const cos = Math.cos(offset);
+                const sin = Math.sin(offset);
+                const newDirX = dirX * cos - dirY * sin;
+                const newDirY = dirX * sin + dirY * cos;
+                dirX = newDirX;
+                dirY = newDirY;
+            }
+            
+            this.projectiles.push({
+                x: this.player.x,
+                y: this.player.y,
+                dirX: dirX,
+                dirY: dirY,
+                speed: 15,
+                lifetime: 2.0
+            });
+        }
 
-        // Simple hitscan: stun the closest enemy roughly in front of the player
-        let bestEnemy = null;
-        let bestDist = Infinity;
+        // Hitscan: damage/stun enemies in front
+        const range = this.currentWeapon === 'shotgun' ? 6 : 8; // Shotgun shorter range
+        const cone = this.currentWeapon === 'shotgun' ? Math.PI / 4 : Math.PI / 6; // Shotgun wider cone
+        const damage = 1; // Each hit does 1 damage
+        
+        let hitEnemy = false;
+        let killedEnemy = false;
 
-        for (let i = 0; i < this.enemies.length; i++) {
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
             const dx = enemy.x - this.player.x;
             const dy = enemy.y - this.player.y;
             const dist = Math.hypot(dx, dy);
-            if (dist > 8) continue; // max range
+            if (dist > range) continue;
 
             const dirLen = Math.hypot(this.player.dirX, this.player.dirY) || 1;
             const ndx = dx / dist;
@@ -396,22 +629,45 @@ class DoomGame {
             const ndirY = this.player.dirY / dirLen;
             const dot = ndx * ndirX + ndy * ndirY;
 
-            if (dot < Math.cos(Math.PI / 6)) continue; // ~30 degree cone
+            if (dot < Math.cos(cone)) continue;
 
-            if (dist < bestDist) {
-                bestDist = dist;
-                bestEnemy = enemy;
+            // Hit!
+            hitEnemy = true;
+            enemy.health -= damage;
+            
+            if (this.huntMode && enemy.health <= 0) {
+                // Enemy killed
+                this.enemies.splice(i, 1);
+                this.killCount++;
+                killedEnemy = true;
+                
+                // Update kill counter
+                const doomScore = document.querySelector('.doom-score');
+                if (doomScore) {
+                    doomScore.innerHTML = '<span style="color:var(--neon-pink);font-size:1.2em;">I SMELL BLOOD</span><br><span style="font-size:0.7em;opacity:0.8">KILLS: <span style="color:var(--neon-yellow)">' + this.killCount + '/3</span></span>';
+                }
+                
+                // Spawn new enemies after first and second kill
+                if (this.killCount === 1 || this.killCount === 2) {
+                    this.spawnEnemy();
+                }
+                
+                // Check for victory
+                if (this.killCount >= 3) {
+                    this.stop(true);
+                    return;
+                }
+            } else {
+                // Just stun if not in hunt mode
+                this.enemySpeedMultiplier = 0;
+                this.enemyPowerupTimer = 3;
             }
         }
 
-        if (bestEnemy) {
-            // Stun enemy via speed multiplier / timer
-            this.enemySpeedMultiplier = 0;
-            this.enemyPowerupTimer = 3; // seconds
-
-            if (this.targetsElement) {
-                this.targetsElement.textContent = 'MONSTER STUNNED';
-            }
+        if (killedEnemy && this.targetsElement) {
+            this.targetsElement.textContent = 'MONSTER KILLED!';
+        } else if (hitEnemy && this.targetsElement) {
+            this.targetsElement.textContent = 'HIT!';
         }
     }
 
@@ -639,6 +895,7 @@ class DoomGame {
         this.enemySpeedMultiplier = 1;
         this.enemyPowerupTimer = 0;
         this.hasGun = false;
+        this.currentWeapon = 'none';
         this.shootCooldown = 0;
         this.gunAnimTimer = 0;
         this.bullets = 0;
@@ -647,11 +904,22 @@ class DoomGame {
         this.powerupSpawnTimer = 0;
         this.lastStepPos.x = this.player.x;
         this.lastStepPos.y = this.player.y;
+        this.pointerLocked = false;
+        this.gunIdleFrame = 0;
+        this.gunIdleTimer = 0;
+        this.gunSwayOffset = 0;
+        this.huntMode = false;
+        this.killCount = 0;
 
         this.spawnEntities();
 
         if (this.overlay) this.overlay.style.display = 'block';
         if (this.messageElement) this.messageElement.style.display = 'none';
+        
+        // Show controls hint initially
+        if (this.controlsHint) {
+            this.controlsHint.style.opacity = '1';
+        }
 
         const doomScore = document.querySelector('.doom-score');
         if (doomScore) {
@@ -696,8 +964,9 @@ class DoomGame {
             // Random powerup type
             const rand = Math.random();
             let pType;
-            if (rand < 0.33) pType = 'speed';
-            else if (rand < 0.66) pType = 'gun';
+            if (rand < 0.25) pType = 'speed';
+            else if (rand < 0.50) pType = 'gun';
+            else if (rand < 0.75) pType = 'shotgun';
             else pType = 'clock';
 
             this.powerups.push({
@@ -705,6 +974,31 @@ class DoomGame {
                 y: py + 0.5,
                 collected: false,
                 type: pType
+            });
+        }
+    }
+
+    spawnEnemy() {
+        // Spawn a new enemy at a random location far from player
+        let ex, ey;
+        let attempts = 0;
+        do {
+            ex = Math.floor(Math.random() * this.mapWidth);
+            ey = Math.floor(Math.random() * this.mapHeight);
+            attempts++;
+        } while (
+            attempts < 100 &&
+            (this.map[ey][ex] !== 0 ||
+                Math.hypot(ex + 0.5 - this.player.x, ey + 0.5 - this.player.y) < 8)
+        );
+
+        if (this.map[ey][ex] === 0) {
+            this.enemies.push({
+                x: ex + 0.5,
+                y: ey + 0.5,
+                speed: 1.0 + Math.random() * 0.3,
+                health: 3,
+                maxHealth: 3
             });
         }
     }
@@ -770,13 +1064,24 @@ class DoomGame {
             this.enemies.push({
                 x: ex + 0.5,
                 y: ey + 0.5,
-                speed: 1.0 + Math.random() * 0.3 // Slower chase
+                speed: 1.0 + Math.random() * 0.3, // Slower chase
+                health: 3, // Takes 3 hits to kill
+                maxHealth: 3
             });
         }
     }
 
     stop(won) {
         this.running = false;
+        
+        // Stop BFG Division music
+        try {
+            this.bfgMusic.pause();
+            this.bfgMusic.currentTime = 0;
+        } catch (err) {
+            console.warn('Failed to stop BFG Division:', err);
+        }
+        
         if (this.messageElement) {
             this.messageElement.textContent = won ? 'TARGET ACQUIRED' : 'CRITICAL FAILURE';
             this.messageElement.style.display = 'block';
@@ -792,12 +1097,14 @@ class DoomGame {
     update(dt) {
         if (!this.running) return;
 
-        // Update countdown timer
-        this.timeRemaining -= dt;
-        if (this.timeRemaining <= 0) {
-            this.timeRemaining = 0;
-            this.stop(false); // Time's up - player loses
-            return;
+        // Update countdown timer (only matters if not in hunt mode)
+        if (!this.huntMode) {
+            this.timeRemaining -= dt;
+            if (this.timeRemaining <= 0) {
+                this.timeRemaining = 0;
+                this.stop(false); // Time's up - player loses
+                return;
+            }
         }
         this.updateTimer();
 
@@ -836,6 +1143,12 @@ class DoomGame {
             if (this.gunAnimTimer < 0) this.gunAnimTimer = 0;
         }
 
+        // Gun sway animation (walking bob) - only update if moving
+        const isMoving = this.input.forward || this.input.backward || this.input.left || this.input.right;
+        if (isMoving && this.hasGun) {
+            this.gunSwayOffset += this.gunSwaySpeed * dt;
+        }
+
         // Update projectile bullets
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const proj = this.projectiles[i];
@@ -865,33 +1178,25 @@ class DoomGame {
         const moveSpeed = this.baseMoveSpeed * this.speedMultiplier * dt;
         const rotSpeed = 2.5 * dt;
 
-        // Rotation (fixed so controls feel normal)
-        if (this.input.right) {
+        // Arrow key rotation (fallback to keyboard rotation)
+        if (this.input.rotateRight) {
             const oldDirX = this.player.dirX;
-            this.player.dirX =
-                this.player.dirX * Math.cos(rotSpeed) - this.player.dirY * Math.sin(rotSpeed);
-            this.player.dirY =
-                oldDirX * Math.sin(rotSpeed) + this.player.dirY * Math.cos(rotSpeed);
+            this.player.dirX = this.player.dirX * Math.cos(rotSpeed) - this.player.dirY * Math.sin(rotSpeed);
+            this.player.dirY = oldDirX * Math.sin(rotSpeed) + this.player.dirY * Math.cos(rotSpeed);
             const oldPlaneX = this.player.planeX;
-            this.player.planeX =
-                this.player.planeX * Math.cos(rotSpeed) - this.player.planeY * Math.sin(rotSpeed);
-            this.player.planeY =
-                oldPlaneX * Math.sin(rotSpeed) + this.player.planeY * Math.cos(rotSpeed);
+            this.player.planeX = this.player.planeX * Math.cos(rotSpeed) - this.player.planeY * Math.sin(rotSpeed);
+            this.player.planeY = oldPlaneX * Math.sin(rotSpeed) + this.player.planeY * Math.cos(rotSpeed);
         }
-        if (this.input.left) {
+        if (this.input.rotateLeft) {
             const oldDirX = this.player.dirX;
-            this.player.dirX =
-                this.player.dirX * Math.cos(-rotSpeed) - this.player.dirY * Math.sin(-rotSpeed);
-            this.player.dirY =
-                oldDirX * Math.sin(-rotSpeed) + this.player.dirY * Math.cos(-rotSpeed);
+            this.player.dirX = this.player.dirX * Math.cos(-rotSpeed) - this.player.dirY * Math.sin(-rotSpeed);
+            this.player.dirY = oldDirX * Math.sin(-rotSpeed) + this.player.dirY * Math.cos(-rotSpeed);
             const oldPlaneX = this.player.planeX;
-            this.player.planeX =
-                this.player.planeX * Math.cos(-rotSpeed) - this.player.planeY * Math.sin(-rotSpeed);
-            this.player.planeY =
-                oldPlaneX * Math.sin(-rotSpeed) + this.player.planeY * Math.cos(-rotSpeed);
+            this.player.planeX = this.player.planeX * Math.cos(-rotSpeed) - this.player.planeY * Math.sin(-rotSpeed);
+            this.player.planeY = oldPlaneX * Math.sin(-rotSpeed) + this.player.planeY * Math.cos(-rotSpeed);
         }
 
-        // Movement
+        // Movement (A/D now strafe left/right instead of rotate)
         const oldX = this.player.x;
         const oldY = this.player.y;
 
@@ -915,6 +1220,32 @@ class DoomGame {
                 this.player.y = nextY;
             }
         }
+        
+        // Strafe left (perpendicular to direction)
+        if (this.input.left) {
+            // Left strafe is perpendicular to direction (rotate dir by 90 degrees)
+            const nextX = this.player.x + this.player.dirY * moveSpeed;
+            const nextY = this.player.y - this.player.dirX * moveSpeed;
+            if (this.map[Math.floor(this.player.y)][Math.floor(nextX)] === 0) {
+                this.player.x = nextX;
+            }
+            if (this.map[Math.floor(nextY)][Math.floor(this.player.x)] === 0) {
+                this.player.y = nextY;
+            }
+        }
+        
+        // Strafe right (perpendicular to direction)
+        if (this.input.right) {
+            // Right strafe is perpendicular to direction (rotate dir by -90 degrees)
+            const nextX = this.player.x - this.player.dirY * moveSpeed;
+            const nextY = this.player.y + this.player.dirX * moveSpeed;
+            if (this.map[Math.floor(this.player.y)][Math.floor(nextX)] === 0) {
+                this.player.x = nextX;
+            }
+            if (this.map[Math.floor(nextY)][Math.floor(this.player.x)] === 0) {
+                this.player.y = nextY;
+            }
+        }
 
         // Footstep sounds when actually moving
         const moved = Math.hypot(this.player.x - oldX, this.player.y - oldY);
@@ -930,11 +1261,13 @@ class DoomGame {
             }
         }
 
-        // Check ball collision
-        const distToBall = Math.hypot(this.ball.x - this.player.x, this.ball.y - this.player.y);
-        if (distToBall < 0.5) {
-            this.stop(true);
-            return;
+        // Check ball collision (only if not in hunt mode)
+        if (!this.huntMode) {
+            const distToBall = Math.hypot(this.ball.x - this.player.x, this.ball.y - this.player.y);
+            if (distToBall < 0.5) {
+                this.stop(true);
+                return;
+            }
         }
 
         // Check powerup collisions
@@ -959,9 +1292,12 @@ class DoomGame {
             if (dist < closestEnemyDist) closestEnemyDist = dist;
 
             if (dist < 0.5) {
-                this.playJumpscare();
-                this.stop(false);
-                return;
+                // Only lose if not in hunt mode
+                if (!this.huntMode) {
+                    this.playJumpscare();
+                    this.stop(false);
+                    return;
+                }
             }
 
             if (dist > 0.01) {
@@ -1050,14 +1386,9 @@ class DoomGame {
         this.ctx.fillStyle = '#000000';
         this.ctx.fillRect(0, 0, this.width, this.height / 2);
         
-        // Draw textured floor (same texture as walls)
-        if (this.wallTextureLoaded) {
-            this.drawFloor();
-        } else {
-            // Fallback solid floor if texture not loaded
-            this.ctx.fillStyle = '#000000';
-            this.ctx.fillRect(0, this.height / 2, this.width, this.height / 2);
-        }
+        // Draw solid black floor (disabled textured floor for performance)
+        this.ctx.fillStyle = '#000000';
+        this.ctx.fillRect(0, this.height / 2, this.width, this.height / 2);
 
         const zBuffer = new Array(this.width).fill(0);
 
@@ -1315,6 +1646,9 @@ class DoomGame {
                 } else if (sprite.powerupType === 'gun') {
                     img = this.gunPowerImage;
                     imgLoaded = this.gunPowerImageLoaded;
+                } else if (sprite.powerupType === 'shotgun') {
+                    img = this.shotgunPowerImage;
+                    imgLoaded = this.shotgunPowerImageLoaded;
                 } else if (sprite.powerupType === 'clock') {
                     img = this.clockPowerImage;
                     imgLoaded = this.clockPowerImageLoaded;
@@ -1371,17 +1705,74 @@ class DoomGame {
         }
         
         // Weapon / flashlight at bottom of screen
-        if (this.hasGun && this.gunShootImageLoaded) {
-            // Always show the animated gun GIF in bottom-center when gun is acquired
+        if (this.hasGun && this.currentWeapon === 'pistol' && this.gunSpriteSheetLoaded) {
+            // Draw pistol sprite from sprite sheet (2x3 grid)
             const gunH = this.height * 0.45;
-            const gunW = gunH * (this.gunShootImage.width / this.gunShootImage.height);
+            const gunW = gunH * (this.gunFrameWidth / this.gunFrameHeight);
 
-            // Position in bottom-center (middle of screen)
-            const gunX = (this.width - gunW) / 2;
-            const gunY = this.height - gunH + 20;
+            // Apply walking sway (bobbing effect)
+            const swayX = Math.sin(this.gunSwayOffset) * 15; // Horizontal sway
+            const swayY = Math.abs(Math.sin(this.gunSwayOffset * 2)) * 10; // Vertical bob
 
-            // Draw the gun GIF (always animating)
-            this.ctx.drawImage(this.gunShootImage, gunX, gunY, gunW, gunH);
+            // Position in bottom-center (middle of screen) with sway
+            const gunX = (this.width - gunW) / 2 + swayX;
+            const gunY = this.height - gunH + 20 - swayY;
+
+            let frameX, frameY;
+            
+            if (this.gunAnimTimer > 0) {
+                // Shooting animation - use bottom 2 frames (row 2)
+                // Alternate between the two shooting frames
+                const shootFrame = Math.floor((this.gunAnimDuration - this.gunAnimTimer) / (this.gunAnimDuration / 2)) % 2;
+                frameX = shootFrame;
+                frameY = 2; // Bottom row
+            } else {
+                // Idle animation - just use first frame (no cycling)
+                frameX = 0;
+                frameY = 0;
+            }
+
+            // Draw the appropriate frame from sprite sheet
+            this.ctx.drawImage(
+                this.gunSpriteSheet,
+                frameX * this.gunFrameWidth, frameY * this.gunFrameHeight, // Source x, y
+                this.gunFrameWidth, this.gunFrameHeight, // Source width, height
+                gunX, gunY, gunW, gunH // Destination x, y, width, height
+            );
+        } else if (this.hasGun && this.currentWeapon === 'shotgun' && this.shotgunSpriteSheetLoaded) {
+            // Draw shotgun sprite from sprite sheet (6 cols x 2 rows)
+            const shotgunH = this.height * 0.45;
+            const shotgunW = shotgunH * (this.shotgunFrameWidth / this.shotgunFrameHeight);
+
+            // Apply walking sway (bobbing effect)
+            const swayX = Math.sin(this.gunSwayOffset) * 15; // Horizontal sway
+            const swayY = Math.abs(Math.sin(this.gunSwayOffset * 2)) * 10; // Vertical bob
+
+            // Position in bottom-center with sway
+            const shotgunX = (this.width - shotgunW) / 2 + swayX;
+            const shotgunY = this.height - shotgunH + 20 - swayY;
+
+            let frameCol, frameRow;
+            
+            if (this.gunAnimTimer > 0) {
+                // Shooting animation - cycle through bottom 6 frames
+                const totalFrames = 6;
+                const progress = 1 - (this.gunAnimTimer / this.shotgunAnimDuration);
+                frameCol = Math.min(Math.floor(progress * totalFrames), totalFrames - 1);
+                frameRow = 1; // Bottom row
+            } else {
+                // Idle - use first frame of top row
+                frameCol = 0;
+                frameRow = 0;
+            }
+
+            // Draw the appropriate frame from sprite sheet
+            this.ctx.drawImage(
+                this.shotgunSpriteSheet,
+                frameCol * this.shotgunFrameWidth, frameRow * this.shotgunFrameHeight,
+                this.shotgunFrameWidth, this.shotgunFrameHeight,
+                shotgunX, shotgunY, shotgunW, shotgunH
+            );
         } else if (this.flashlightLoaded) {
             // Default flashlight when gun is not acquired
             const flashlightH = this.height * 0.4; // 40% of screen height
